@@ -1,0 +1,41 @@
+services:
+  db:
+    image: mysql:8.0
+    container_name: crud-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: crud_db
+      MYSQL_USER: crud_user
+      MYSQL_PASSWORD: crud_pass
+    expose:
+      - "3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-prootpassword"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  app:
+    build: .
+    container_name: crud-app
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env
+    environment:
+      PORT: 3000
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_USER: crud_user
+      DB_PASSWORD: crud_pass
+      DB_NAME: crud_db
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  mysql_data:

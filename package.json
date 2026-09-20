@@ -1,0 +1,14 @@
+{
+  "name": "docker-crud-app",
+  "version": "1.0.0",
+  "description": "Express + MySQL CRUD app running in Docker",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.21.2",
+    "mysql2": "^3.11.0"
+  }
+}

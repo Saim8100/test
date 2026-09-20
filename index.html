@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Task board</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #e9edf4;
+      --panel: #ffffff;
+      --ink: #1a2238;
+      --muted: #5d6885;
+      --line: #d3d9e6;
+      --accent: #2c56e0;
+      --accent-ink: #ffffff;
+      --pending: #8590ab;
+      --progress: #c98512;
+      --done: #1f8a63;
+      --danger: #c23b3b;
+      --radius: 10px;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: "Instrument Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+      font-size: 16px;
+      line-height: 1.5;
+    }
+
+    .wrap {
+      max-width: 1040px;
+      margin: 0 auto;
+      padding: 40px 20px 64px;
+    }
+
+    header { margin-bottom: 28px; }
+    h1 { margin: 0; font-size: 2.25rem; font-weight: 700; letter-spacing: -0.02em; }
+    #summary { margin: 4px 0 0; color: var(--muted); }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 320px 1fr;
+      gap: 28px;
+      align-items: start;
+    }
+
+    /* ---------- Form ---------- */
+    .editor {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 22px;
+      position: sticky;
+      top: 20px;
+    }
+    .editor h2 { margin: 0 0 16px; font-size: 1.15rem; }
+    .field { margin-bottom: 14px; }
+    label { display: block; margin-bottom: 4px; font-weight: 600; font-size: 0.9rem; }
+    input[type="text"], textarea, select {
+      width: 100%;
+      padding: 9px 11px;
+      font: inherit;
+      color: var(--ink);
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+    }
+    textarea { resize: vertical; min-height: 84px; }
+
+    .buttons { display: flex; gap: 8px; margin-top: 18px; }
+    button {
+      font: inherit;
+      font-weight: 600;
+      cursor: pointer;
+      border-radius: 8px;
+      border: 1px solid var(--line);
+      background: #fff;
+      color: var(--ink);
+      padding: 8px 14px;
+    }
+    button:hover { border-color: var(--muted); }
+    button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+    button.primary:hover { filter: brightness(1.1); }
+    button.danger { color: var(--danger); }
+    button.danger:hover { border-color: var(--danger); }
+    button[hidden] { display: none; }
+
+    :focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+
+    /* ---------- List ---------- */
+    .filters { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+    .filters button { padding: 6px 12px; font-size: 0.9rem; }
+    .filters button[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: #fff; }
+
+    ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+
+    .task {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 14px;
+      align-items: center;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-left: 6px solid var(--pending);
+      border-radius: var(--radius);
+      padding: 14px 16px;
+    }
+    .task[data-status="in_progress"] { border-left-color: var(--progress); }
+    .task[data-status="done"] { border-left-color: var(--done); }
+    .task[data-status="done"] h3 { text-decoration: line-through; color: var(--muted); }
+
+    .task h3 { margin: 0; font-size: 1.05rem; overflow-wrap: anywhere; }
+    .task p { margin: 2px 0 0; color: var(--muted); overflow-wrap: anywhere; white-space: pre-wrap; }
+    .task time { display: block; margin-top: 6px; font-size: 0.8rem; color: var(--muted); }
+
+    .actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+    .actions select { width: auto; padding: 6px 8px; font-size: 0.9rem; }
+    .actions button { padding: 6px 12px; font-size: 0.9rem; }
+
+    #empty { color: var(--muted); padding: 28px 0; }
+
+    /* ---------- Toast ---------- */
+    #toast {
+      position: fixed;
+      left: 50%;
+      bottom: 24px;
+      transform: translate(-50%, 20px);
+      background: var(--ink);
+      color: #fff;
+      padding: 10px 18px;
+      border-radius: 8px;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s, transform 0.2s;
+    }
+    #toast.show { opacity: 1; transform: translate(-50%, 0); }
+    #toast.error { background: var(--danger); }
+
+    @media (max-width: 860px) {
+      .layout { grid-template-columns: 1fr; }
+      .editor { position: static; }
+      .task { grid-template-columns: 1fr; }
+      .actions { justify-content: flex-start; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      #toast { transition: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>Task board</h1>
+      <p id="summary">Loading tasks…</p>
+    </header>
+
+    <div class="layout">
+      <section class="editor" aria-labelledby="form-title">
+        <h2 id="form-title">Add a task</h2>
+        <form id="task-form" novalidate>
+          <div class="field">
+            <label for="title">Title</label>
+            <input type="text" id="title" maxlength="255" required />
+          </div>
+          <div class="field">
+            <label for="description">Description</label>
+            <textarea id="description"></textarea>
+          </div>
+          <div class="field">
+            <label for="status">Status</label>
+            <select id="status">
+              <option value="pending">Pending</option>
+              <option value="in_progress">In progress</option>
+              <option value="done">Done</option>
+            </select>
+          </div>
+          <div class="buttons">
+            <button type="submit" class="primary" id="submit-btn">Add task</button>
+            <button type="button" id="cancel-btn" hidden>Cancel edit</button>
+          </div>
+        </form>
+      </section>
+
+      <section aria-label="Tasks">
+        <div class="filters" id="filters">
+          <button type="button" data-filter="all" aria-pressed="true">All</button>
+          <button type="button" data-filter="pending" aria-pressed="false">Pending</button>
+          <button type="button" data-filter="in_progress" aria-pressed="false">In progress</button>
+          <button type="button" data-filter="done" aria-pressed="false">Done</button>
+        </div>
+        <ul id="tasks"></ul>
+        <p id="empty" hidden>No tasks here yet. Add one using the form.</p>
+      </section>
+    </div>
+  </div>
+
+  <div id="toast" role="status" aria-live="polite"></div>
+
+  <script>
+    // Same origin by default (Express serves this page). If you open this file
+    // separately, set API_BASE to 'http://localhost:3000' — CORS is enabled on the server.
+    const API_BASE = '';
+    const API = API_BASE + '/api/tasks';
+
+    const STATUS_LABEL = { pending: 'Pending', in_progress: 'In progress', done: 'Done' };
+
+    let tasks = [];
+    let filter = 'all';
+    let editingId = null;
+
+    const $ = (id) => document.getElementById(id);
+    const form = $('task-form');
+    const list = $('tasks');
+
+    // ---------- API helper ----------
+    async function request(url, options = {}) {
+      const res = await fetch(url, {
+        headers: { 'Content-Type': 'application/json' },
+        ...options,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Request failed.');
+      return data;
+    }
+
+    // ---------- Toast ----------
+    let toastTimer;
+    function toast(message, isError = false) {
+      const el = $('toast');
+      el.textContent = message;
+      el.className = 'show' + (isError ? ' error' : '');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => (el.className = ''), 2800);
+    }
+
+    // ---------- Read ----------
+    async function loadTasks() {
+      try {
+        tasks = await request(API);
+        render();
+      } catch (err) {
+        $('summary').textContent = 'Could not load tasks.';
+        toast(err.message, true);
+      }
+    }
+
+    // ---------- Render ----------
+    function render() {
+      const done = tasks.filter((t) => t.status === 'done').length;
+      $('summary').textContent = tasks.length
+        ? `${done} of ${tasks.length} tasks done`
+        : 'No tasks yet';
+
+      const visible = filter === 'all' ? tasks : tasks.filter((t) => t.status === filter);
+      list.replaceChildren(...visible.map(buildTask));
+      $('empty').hidden = visible.length > 0;
+    }
+
+    function buildTask(task) {
+      const li = document.createElement('li');
+      li.className = 'task';
+      li.dataset.status = task.status;
+
+      const body = document.createElement('div');
+      const h3 = document.createElement('h3');
+      h3.textContent = task.title;
+      body.appendChild(h3);
+      if (task.description) {
+        const p = document.createElement('p');
+        p.textContent = task.description;
+        body.appendChild(p);
+      }
+      const time = document.createElement('time');
+      time.textContent = 'Added ' + new Date(task.created_at).toLocaleString();
+      body.appendChild(time);
+
+      const actions = document.createElement('div');
+      actions.className = 'actions';
+
+      const select = document.createElement('select');
+      select.setAttribute('aria-label', `Status for ${task.title}`);
+      Object.entries(STATUS_LABEL).forEach(([value, label]) => {
+        const opt = new Option(label, value, false, value === task.status);
+        select.appendChild(opt);
+      });
+      select.addEventListener('change', () => changeStatus(task, select.value));
+
+      const edit = document.createElement('button');
+      edit.type = 'button';
+      edit.textContent = 'Edit';
+      edit.addEventListener('click', () => startEdit(task));
+
+      const del = document.createElement('button');
+      del.type = 'button';
+      del.className = 'danger';
+      del.textContent = 'Delete';
+      del.addEventListener('click', () => deleteTask(task));
+
+      actions.append(select, edit, del);
+      li.append(body, actions);
+      return li;
+    }
+
+    // ---------- Create / Update ----------
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const payload = {
+        title: $('title').value.trim(),
+        description: $('description').value.trim(),
+        status: $('status').value,
+      };
+      if (!payload.title) {
+        toast('Enter a title before saving.', true);
+        $('title').focus();
+        return;
+      }
+
+      try {
+        if (editingId) {
+          await request(`${API}/${editingId}`, { method: 'PUT', body: JSON.stringify(payload) });
+          toast('Task updated.');
+        } else {
+          await request(API, { method: 'POST', body: JSON.stringify(payload) });
+          toast('Task added.');
+        }
+        resetForm();
+        await loadTasks();
+      } catch (err) {
+        toast(err.message, true);
+      }
+    });
+
+    async function changeStatus(task, status) {
+      try {
+        await request(`${API}/${task.id}`, {
+          method: 'PUT',
+          body: JSON.stringify({ title: task.title, description: task.description || '', status }),
+        });
+        toast('Task updated.');
+        await loadTasks();
+      } catch (err) {
+        toast(err.message, true);
+        render();
+      }
+    }
+
+    function startEdit(task) {
+      editingId = task.id;
+      $('title').value = task.title;
+      $('description').value = task.description || '';
+      $('status').value = task.status;
+      $('form-title').textContent = 'Edit task';
+      $('submit-btn').textContent = 'Save changes';
+      $('cancel-btn').hidden = false;
+      $('title').focus();
+    }
+
+    function resetForm() {
+      editingId = null;
+      form.reset();
+      $('form-title').textContent = 'Add a task';
+      $('submit-btn').textContent = 'Add task';
+      $('cancel-btn').hidden = true;
+    }
+
+    $('cancel-btn').addEventListener('click', resetForm);
+
+    // ---------- Delete ----------
+    async function deleteTask(task) {
+      if (!confirm(`Delete "${task.title}"? This cannot be undone.`)) return;
+      try {
+        await request(`${API}/${task.id}`, { method: 'DELETE' });
+        if (editingId === task.id) resetForm();
+        toast('Task deleted.');
+        await loadTasks();
+      } catch (err) {
+        toast(err.message, true);
+      }
+    }
+
+    // ---------- Filters ----------
+    $('filters').addEventListener('click', (e) => {
+      const btn = e.target.closest('button[data-filter]');
+      if (!btn) return;
+      filter = btn.dataset.filter;
+      document.querySelectorAll('#filters button').forEach((b) =>
+        b.setAttribute('aria-pressed', String(b === btn))
+      );
+      render();
+    });
+
+    loadTasks();
+  </script>
+</body>
+</html>
